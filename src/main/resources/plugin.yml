@@ -1,0 +1,20 @@
+name: Courier
+version: '${version}'
+main: dev.courier.CourierPlugin
+api-version: '1.21'
+authors: [Groovyy Roy]
+description: Delivery missions - fetch a tagged item, carry it to a random location, drop it off before time runs out
+softdepend: [PlaceholderAPI, Vault, WorldGuard, DeluxeMenus]
+
+commands:
+  courier:
+    description: Start, manage and inspect delivery missions
+    usage: /<command> start|cancel|reset|info|reload [player]
+
+permissions:
+  courier.use:
+    description: Start your own mission (if allow-self-start is on) and check your own info
+    default: true
+  courier.admin:
+    description: Start/cancel/reset missions for anyone and reload the config
+    default: op

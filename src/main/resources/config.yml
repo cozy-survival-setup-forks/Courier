@@ -1,0 +1,134 @@
+mission-duration: "1h"
+cooldown: "24h"
+allow-self-start: true
+fail-on-death: false
+fail-on-quit: false
+cooldown-on-fail: true
+
+# PLACE: player places the item as a block within dropoff.radius
+# INTERACT: player right-clicks while holding the item within dropoff.radius
+complete-mode: PLACE
+
+item:
+  material: PAPER
+  name: "<gold><bold>Delivery Package"
+  lore:
+    - "<gray>Carry this to the marked location"
+    - "<gray>before your time runs out."
+
+dropoff:
+  worlds: [world]
+  resource-worlds: []
+  radius: 5
+  remove-after: 0 # seconds after completion the placed block despawns; 0 = instant
+
+particles:
+  enabled: true
+  type: END_ROD
+  radius: 0.6
+  height: 4
+  points-per-ring: 16
+  interval-ticks: 10
+  view-distance: 48
+
+actionbar:
+  format: "<gray>Time left: <white>%time_left% <gray>| Distance: <white>%distance% <gray>| World: <white>%world%"
+  format-different-world: "<gray>Time left: <white>%time_left% <gray>| World: <white>%world%"
+
+# per-world safe location scanning. Add an entry for every world in dropoff.worlds
+# (and dropoff.resource-worlds) that should get randomised targets.
+location-picker:
+  worlds:
+    world:
+      center-x: 0
+      center-z: 0
+      min-radius: 200
+      max-radius: 3000
+      max-attempts: 40
+  biome-blacklist:
+    - OCEAN
+    - DEEP_OCEAN
+    - COLD_OCEAN
+    - DEEP_COLD_OCEAN
+    - FROZEN_OCEAN
+    - DEEP_FROZEN_OCEAN
+    - LUKEWARM_OCEAN
+    - DEEP_LUKEWARM_OCEAN
+    - WARM_OCEAN
+    - RIVER
+    - FROZEN_RIVER
+    - DEEP_DARK
+  nether-max-y: 120
+  scan-start-y: 250
+  blacklisted-regions: []
+
+protection:
+  block-drop: true
+  block-place-outside-dropoff: true
+  block-move-to-foreign-inventory: true
+  block-hopper: true
+  block-crafting: true
+  block-anvil: true
+  block-bundle: true
+  block-item-frame: true
+
+blocked-commands-while-holding:
+  - "ah sell"
+  - "auction sell"
+  - "trade"
+  - "pv"
+  - "vault"
+
+rewards:
+  - chance: 70
+    money: 50
+    commands: []
+    items: []
+    message: "<green>Delivery complete! You earned $50."
+  - chance: 25
+    money: 100
+    commands: []
+    items:
+      - material: DIAMOND
+        amount: 2
+        name: "<aqua>Bonus Diamonds"
+        lore: []
+    message: "<aqua>Delivery complete! You earned 2 diamonds and $100."
+  - chance: 5
+    money: 0
+    commands:
+      - "crates give {player} rare 1"
+    items: []
+    message: "<gold>Delivery complete! You earned a rare crate key."
+
+always-rewards:
+  money: 0
+  commands: []
+  items: []
+
+resourceworld:
+  enabled: false
+  plugin-name: ""
+
+messages:
+  no-permission: "<red>You don't have permission to do that."
+  already-active: "<red>You already have an active delivery."
+  on-cooldown: "<red>You're on cooldown for %cooldown%."
+  inventory-full: "<red>Your inventory is full."
+  started: "<green>Delivery started! Take the package to the marked location within %time%."
+  world-moved: "<yellow>Your delivery world regenerated - the drop-off has moved."
+  no-worlds-available: "<red>No delivery location could be found. An admin has been notified."
+  no-worlds-available-console: "[Courier] Could not find a safe drop-off for %player% in any configured world."
+  expired: "<red>Your delivery expired. The package is gone."
+  failed-death: "<red>You died with an active delivery - it has failed."
+  failed-quit: "<red>You logged out with an active delivery - it has failed."
+  completed: "<green>Delivery complete!"
+  command-blocked: "<red>You can't use that while carrying a delivery."
+  no-mission: "<red>%player% has no active delivery."
+  cancelled: "<yellow>Delivery for %player% cancelled."
+  reset: "<yellow>Cooldown for %player% reset."
+  reloaded: "<green>Courier config reloaded."
+  info-active: "<gray>%player% - active, %time_left% left, world %world%."
+  info-cooldown: "<gray>%player% - on cooldown, %cooldown_left% left."
+  info-idle: "<gray>%player% - no active delivery, no cooldown."
+  player-not-found: "<red>Player not found."

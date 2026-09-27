@@ -1,0 +1,69 @@
+# Example DeluxeMenus menu for Courier. Not loaded by Courier itself - copy into DeluxeMenus'
+# own menus/ folder if you want it. Every placeholder here is O(1) and safe to poll on refresh.
+menu_title: '&8Courier'
+open_command:
+  - courierboard
+size: 27
+fill_item:
+  material: GRAY_STAINED_GLASS_PANE
+  display_name: ' '
+  slot: 0-26
+  priority: 1
+
+items:
+  start:
+    material: PAPER
+    slot: 11
+    display_name: '&a&lStart Mission'
+    lore:
+      - '&7Click to start a delivery.'
+    left_click_commands:
+      - '[player] courier start'
+    view_requirement:
+      requirements:
+        can-start:
+          type: 'string equals'
+          input: '%courier_can_start%'
+          output: 'true'
+
+  cannot_start:
+    material: BARRIER
+    slot: 11
+    display_name: '&c&lCan''t Start'
+    lore:
+      - '&7%courier_refusal_reason%'
+    view_requirement:
+      requirements:
+        cannot-start:
+          type: 'string equals ignorecase'
+          input: '%courier_can_start%'
+          output: 'false'
+
+  info:
+    material: COMPASS
+    slot: 13
+    display_name: '&e&lActive Delivery'
+    lore:
+      - '&7World: &f%courier_world%'
+      - '&7Coords: &f%courier_x%, %courier_y%, %courier_z%'
+      - '&7Time left: &f%courier_time_left%'
+      - '&7Distance: &f%courier_distance%'
+    view_requirement:
+      requirements:
+        active:
+          type: 'string equals'
+          input: '%courier_active%'
+          output: 'true'
+
+  cooldown:
+    material: CLOCK
+    slot: 15
+    display_name: '&c&lOn Cooldown'
+    lore:
+      - '&7Try again in &f%courier_cooldown%'
+    view_requirement:
+      requirements:
+        on-cooldown:
+          type: 'number greater than'
+          input: '%courier_cooldown_seconds%'
+          output: '0'
