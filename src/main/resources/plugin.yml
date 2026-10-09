@@ -2,7 +2,8 @@ name: Courier
 version: '${version}'
 main: dev.courier.CourierPlugin
 api-version: '1.21'
-authors: [Groovyy Roy]
+authors: [Groovified]
+website: https://discord.gg/blockie
 description: Delivery missions - fetch a tagged item, carry it to a random location, drop it off before time runs out
 softdepend: [PlaceholderAPI, Vault, WorldGuard, DeluxeMenus]
 
