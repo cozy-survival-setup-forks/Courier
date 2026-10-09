@@ -12,8 +12,10 @@ import org.bukkit.inventory.PlayerInventory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /** Owns every active mission and the one shared repeating task that drives them all. */
 final class MissionManager {
@@ -27,14 +29,18 @@ final class MissionManager {
     private final Rewards rewards;
     private final ResourceWorldSupport resourceWorlds;
     private final Map<UUID, Mission> active = new ConcurrentHashMap<>();
+    /** Players whose delivery is being set up (the location is searched asynchronously): they cannot start a second one meanwhile. */
+    private final Set<UUID> starting = ConcurrentHashMap.newKeySet();
+    /** When a mission whose world is gone may look for a new place again, so a failing search is not repeated every tick. */
+    private final Map<UUID, Long> rerollAfter = new ConcurrentHashMap<>();
     private long tickCounter;
 
-    MissionManager(CourierPlugin plugin, Storage storage, Economy economy) {
+    MissionManager(CourierPlugin plugin, Storage storage, Supplier<Economy> economy) {
         this.plugin = plugin;
         this.storage = storage;
         this.tag = new ItemTag(plugin);
         this.picker = new LocationPicker(plugin);
-        this.rewards = new Rewards(economy);
+        this.rewards = new Rewards(economy, plugin.getLogger());
         this.resourceWorlds = new ResourceWorldSupport(plugin, this);
     }
 
@@ -55,7 +61,16 @@ final class MissionManager {
         PlayerData data = storage.get(player.getUniqueId());
         if (data.missionId == null)
             return;
-        Mission mission = new Mission(player.getUniqueId(), UUID.fromString(data.missionId), data.missionWorld,
+        UUID missionId;
+        try {
+            missionId = UUID.fromString(data.missionId);
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().warning("The saved delivery of " + player.getName() + " is damaged and was dropped.");
+            clearMission(data);
+            storage.markDirty(player.getUniqueId());
+            return;
+        }
+        Mission mission = new Mission(player.getUniqueId(), missionId, data.missionWorld == null ? "" : data.missionWorld,
             data.missionX, data.missionY, data.missionZ, data.missionStartedAt, data.missionExpiresAt, data.missionResourceWorld);
         if (mission.expired()) {
             active.put(player.getUniqueId(), mission);
@@ -64,6 +79,13 @@ final class MissionManager {
         }
         active.put(player.getUniqueId(), mission);
         resync(player, mission);
+    }
+
+    /** After a death the package is gone from the inventory while the delivery goes on: give it back. */
+    void resyncIfActive(Player player) {
+        Mission mission = active.get(player.getUniqueId());
+        if (mission != null && player.isOnline())
+            resync(player, mission);
     }
 
     /** Puts exactly one tagged item back if it's missing, and removes any extra copies. */
@@ -78,7 +100,7 @@ final class MissionManager {
     }
 
     void start(Player target, boolean announce) {
-        if (active.containsKey(target.getUniqueId())) {
+        if (active.containsKey(target.getUniqueId()) || starting.contains(target.getUniqueId())) {
             target.sendMessage(msg("already-active"));
             return;
         }
@@ -96,13 +118,27 @@ final class MissionManager {
 
         List<String> pool = new ArrayList<>(plugin.config().dropoffWorlds);
         pool.addAll(plugin.config().resourceWorlds);
-        picker.pick(pool).thenAccept(location ->
-            plugin.getServer().getScheduler().runTask(plugin, () -> onLocationFound(target, location)));
+        starting.add(target.getUniqueId());
+        picker.pick(pool).whenComplete((location, error) ->
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                starting.remove(target.getUniqueId());
+                if (error != null) {
+                    plugin.getLogger().warning("Looking for a drop-off for " + target.getName() + " failed: " + error);
+                    if (target.isOnline())
+                        target.sendMessage(msg("no-worlds-available"));
+                    return;
+                }
+                onLocationFound(target, location);
+            }));
     }
 
     private void onLocationFound(Player target, Location location) {
-        if (!target.isOnline())
+        if (!target.isOnline() || active.containsKey(target.getUniqueId()))
             return;
+        if (target.getInventory().firstEmpty() == -1) {
+            target.sendMessage(msg("inventory-full")); // it filled up while the place was being searched
+            return;
+        }
         if (location == null) {
             target.sendMessage(msg("no-worlds-available"));
             plugin.getLogger().warning(plugin.config().message("no-worlds-available-console", "").replace("%player%", target.getName()));
@@ -134,11 +170,16 @@ final class MissionManager {
         Player player = plugin.getServer().getPlayer(mission.player);
         if (player == null)
             return;
+        long now = System.currentTimeMillis();
+        if (rerollAfter.getOrDefault(mission.player, 0L) > now)
+            return;
+        rerollAfter.put(mission.player, now + 30_000L);
         List<String> pool = new ArrayList<>(plugin.config().dropoffWorlds);
         pool.addAll(plugin.config().resourceWorlds);
         picker.pick(pool).thenAccept(location -> plugin.getServer().getScheduler().runTask(plugin, () -> {
             if (location == null || !active.containsKey(mission.player))
                 return;
+            rerollAfter.remove(mission.player);
             mission.world = location.getWorld().getName();
             mission.x = location.getX();
             mission.y = location.getY();
@@ -168,9 +209,13 @@ final class MissionManager {
 
         Config.RewardEntry always = plugin.config().alwaysReward;
         Config.RewardEntry picked = rewards.pick(plugin.config().rewards);
-        if (always != null)
-            rewards.apply(player, always);
-        rewards.apply(player, picked);
+        try {
+            if (always != null)
+                rewards.apply(player, always);
+            rewards.apply(player, picked);
+        } catch (RuntimeException e) {
+            plugin.getLogger().warning("The reward for " + player.getName() + " failed part way: " + e);
+        }
 
         player.sendMessage(msg("completed"));
         player.showTitle(Title.title(msg("completed"), net.kyori.adventure.text.Component.empty()));
@@ -219,6 +264,9 @@ final class MissionManager {
             fail(player, "failed-quit", plugin.config().cooldownOnFail);
         else
             active.remove(player.getUniqueId()); // authority goes back to storage until they rejoin
+        starting.remove(player.getUniqueId());
+        rerollAfter.remove(player.getUniqueId());
+        storage.unload(player.getUniqueId());
     }
 
     void onDeath(Player player) {
@@ -236,12 +284,12 @@ final class MissionManager {
             Player player = plugin.getServer().getPlayer(mission.player);
             if (player == null)
                 continue;
-            if (mission.resourceWorld && plugin.getServer().getWorld(mission.world) == null) {
-                reroll(mission);
-                continue;
-            }
             if (mission.expired()) {
                 fail(player, "expired", plugin.config().cooldownOnFail);
+                continue;
+            }
+            if (plugin.getServer().getWorld(mission.world) == null) {
+                reroll(mission); // the world is gone (regenerated or unloaded)
                 continue;
             }
             if (actionbarDue)

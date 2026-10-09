@@ -27,7 +27,7 @@ final class CourierExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getAuthor() {
-        return "Groovyy Roy";
+        return "Groovified";
     }
 
     @Override
@@ -70,7 +70,7 @@ final class CourierExpansion extends PlaceholderExpansion {
     private boolean canStart(Player player, Mission mission, PlayerData data, long now) {
         if (mission != null || data.cooldownUntil > now)
             return false;
-        if (!plugin.config().allowSelfStart)
+        if (!plugin.config().allowSelfStart || !player.hasPermission("courier.use"))
             return false;
         return player.getInventory().firstEmpty() != -1;
     }
@@ -80,7 +80,7 @@ final class CourierExpansion extends PlaceholderExpansion {
             return plugin.config().message("already-active", "You already have an active delivery.");
         if (data.cooldownUntil > now)
             return plugin.config().message("on-cooldown", "You're on cooldown.").replace("%cooldown%", TimeUtil.format(data.cooldownUntil - now));
-        if (!plugin.config().allowSelfStart)
+        if (!plugin.config().allowSelfStart || !player.hasPermission("courier.use"))
             return plugin.config().message("no-permission", "You don't have permission to do that.");
         if (player.getInventory().firstEmpty() == -1)
             return plugin.config().message("inventory-full", "Your inventory is full.");

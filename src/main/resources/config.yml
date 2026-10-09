@@ -5,9 +5,9 @@ fail-on-death: false
 fail-on-quit: false
 cooldown-on-fail: true
 
-# PLACE: player places the item as a block within dropoff.radius
+# PLACE: player places the item as a block within dropoff.radius (item.material must be a block)
 # INTERACT: player right-clicks while holding the item within dropoff.radius
-complete-mode: PLACE
+complete-mode: INTERACT
 
 item:
   material: PAPER
@@ -128,6 +128,7 @@ messages:
   cancelled: "<yellow>Delivery for %player% cancelled."
   reset: "<yellow>Cooldown for %player% reset."
   reloaded: "<green>Courier config reloaded."
+  reload-failed: "<red>Reload cancelled - see the console. The old settings stay."
   info-active: "<gray>%player% - active, %time_left% left, world %world%."
   info-cooldown: "<gray>%player% - on cooldown, %cooldown_left% left."
   info-idle: "<gray>%player% - no active delivery, no cooldown."

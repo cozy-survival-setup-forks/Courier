@@ -4,6 +4,10 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -12,7 +16,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * One YAML file per player under data/. Reads happen on join (small file, negligible cost).
  * Writes are debounced: callers mark a player dirty and a repeating task flushes everyone
- * dirty every few seconds on an async thread, instead of writing on every change.
+ * dirty every few seconds on an async thread, instead of writing on every change. A file is
+ * written to a temporary name and moved into place, so a crash cannot leave half a file (which
+ * would lose a cooldown). A write that fails is tried again on the next flush.
  */
 final class Storage {
 
@@ -42,14 +48,14 @@ final class Storage {
         dirty.removeAll(java.util.Arrays.asList(toSave));
         for (UUID id : toSave) {
             PlayerData data = cache.get(id);
-            if (data != null)
-                save(id, data);
+            if (data != null && !save(id, data))
+                dirty.add(id);
         }
     }
 
     /** Called on shutdown - flush must be synchronous there, no time for a repeating task. */
     void flushSync() {
-        for (UUID id : dirty) {
+        for (UUID id : dirty.toArray(UUID[]::new)) {
             PlayerData data = cache.get(id);
             if (data != null)
                 save(id, data);
@@ -57,11 +63,11 @@ final class Storage {
         dirty.clear();
     }
 
+    /** A player left: write what is pending and forget them, so the cache only holds players who are online. */
     void unload(UUID player) {
         PlayerData data = cache.remove(player);
-        if (data != null)
+        if (data != null && dirty.remove(player))
             save(player, data);
-        dirty.remove(player);
     }
 
     private PlayerData load(UUID player) {
@@ -69,7 +75,16 @@ final class Storage {
         File file = new File(dir, player + ".yml");
         if (!file.exists())
             return data;
-        YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
+        YamlConfiguration yml = new YamlConfiguration();
+        try {
+            yml.load(file);
+        } catch (Exception e) {
+            // keep the broken file for the admin; the player starts clean and the new data goes to a fresh file
+            File broken = new File(dir, player + ".yml.broken");
+            if (file.renameTo(broken))
+                plugin.getLogger().warning("The data of " + player + " could not be read (" + e.getMessage() + "), it was moved to " + broken.getName() + ".");
+            return data;
+        }
         data.cooldownUntil = yml.getLong("cooldown-until");
         data.completedTotal = yml.getInt("completed-total");
         data.failedTotal = yml.getInt("failed-total");
@@ -84,13 +99,14 @@ final class Storage {
         return data;
     }
 
-    private void save(UUID player, PlayerData data) {
+    private boolean save(UUID player, PlayerData data) {
         YamlConfiguration yml = new YamlConfiguration();
         yml.set("cooldown-until", data.cooldownUntil);
         yml.set("completed-total", data.completedTotal);
         yml.set("failed-total", data.failedTotal);
-        if (data.missionId != null) {
-            yml.set("mission.id", data.missionId);
+        String missionId = data.missionId;
+        if (missionId != null) {
+            yml.set("mission.id", missionId);
             yml.set("mission.world", data.missionWorld);
             yml.set("mission.x", data.missionX);
             yml.set("mission.y", data.missionY);
@@ -99,10 +115,19 @@ final class Storage {
             yml.set("mission.expires-at", data.missionExpiresAt);
             yml.set("mission.resource-world", data.missionResourceWorld);
         }
+        File target = new File(dir, player + ".yml");
+        File tmp = new File(dir, player + ".yml.tmp");
         try {
-            yml.save(new File(dir, player + ".yml"));
-        } catch (Exception e) {
+            Files.writeString(tmp.toPath(), yml.saveToString(), StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
+        } catch (IOException e) {
             plugin.getLogger().warning("Could not save data for " + player + ": " + e.getMessage());
+            return false;
         }
     }
 }

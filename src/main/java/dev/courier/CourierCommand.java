@@ -95,7 +95,13 @@ final class CourierCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(manager.msg("player-not-found"));
             return;
         }
-        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
+        OfflinePlayer target = Bukkit.getPlayerExact(args[1]);
+        if (target == null)
+            target = Bukkit.getOfflinePlayerIfCached(args[1]); // never asks Mojang from the main thread
+        if (target == null) {
+            sender.sendMessage(manager.msg("player-not-found"));
+            return;
+        }
         manager.reset(target.getUniqueId());
         sender.sendMessage(manager.msg("reset").replaceText(b -> b.matchLiteral("%player%").replacement(args[1])));
     }
@@ -140,8 +146,7 @@ final class CourierCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(manager.msg("no-permission"));
             return;
         }
-        plugin.reloadCourierConfig();
-        sender.sendMessage(manager.msg("reloaded"));
+        sender.sendMessage(manager.msg(plugin.reloadCourierConfig() ? "reloaded" : "reload-failed"));
     }
 
     @Override

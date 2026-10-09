@@ -13,9 +13,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Async-safe random location scanning. The chunk is force-loaded via getChunkAtAsync, and the
- * actual block/biome reads run on that future's completion (off the main thread) - only the
- * final Location is handed back to the main thread by the caller.
+ * Random location scanning. The chunk is loaded with getChunkAtAsync (that is the slow part and
+ * it does not block the server); the few block and biome reads then run when the future
+ * completes, which is on the main thread, because reading blocks from another thread is not safe.
  */
 final class LocationPicker {
 
@@ -57,7 +57,7 @@ final class LocationPicker {
         int z = picker.centerZ() + (int) (Math.sin(angle) * dist);
 
         return world.getChunkAtAsync(x >> 4, z >> 4)
-            .thenApplyAsync(chunk -> scan(world, x, z))
+            .thenApply(chunk -> scan(world, x, z))
             .thenCompose(loc -> {
                 if (loc != null && isAllowed(world, loc))
                     return CompletableFuture.completedFuture(loc);

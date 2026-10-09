@@ -10,6 +10,10 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.ItemDespawnEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryPickupItemEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
@@ -67,6 +71,12 @@ final class CourierListener implements Listener {
         manager.onDeath(event.getPlayer());
     }
 
+    @EventHandler
+    public void onRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> manager.resyncIfActive(player), 2L);
+    }
+
     // ---- completion ----
 
     @EventHandler(ignoreCancelled = true)
@@ -84,11 +94,13 @@ final class CourierListener implements Listener {
             return;
         }
         var block = event.getBlockPlaced();
+        var replaced = event.getBlockReplacedState();
+        var placedType = block.getType();
         manager.complete(player);
         int delay = cfg().removeAfterSeconds;
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (block.getType() == event.getBlockPlaced().getType())
-                block.setType(org.bukkit.Material.AIR);
+            if (block.getType() == placedType)
+                replaced.update(true, false); // what stood there before comes back
         }, Math.max(1L, delay * 20L));
     }
 
@@ -110,6 +122,20 @@ final class CourierListener implements Listener {
     }
 
     // ---- protection ----
+
+    /** Blocks that accept any item, which would let a player hide the package inside them. */
+    private static final java.util.Set<org.bukkit.Material> STORES_ANY_ITEM = java.util.Set.of(
+        org.bukkit.Material.DECORATED_POT, org.bukkit.Material.JUKEBOX, org.bukkit.Material.LECTERN,
+        org.bukkit.Material.CHISELED_BOOKSHELF, org.bukkit.Material.COMPOSTER);
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.HIGH, ignoreCancelled = true)
+    public void onStoreAttempt(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null
+            || !STORES_ANY_ITEM.contains(event.getClickedBlock().getType()))
+            return;
+        if (tagOf(event.getItem()) != null)
+            event.setCancelled(true);
+    }
 
     @EventHandler(ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
@@ -138,6 +164,12 @@ final class CourierListener implements Listener {
         ItemStack current = event.getCurrentItem();
         ItemStack cursor = event.getCursor();
         boolean touchesTagged = tagOf(current) != null || tagOf(cursor) != null;
+        if (!touchesTagged && event.getClick() == org.bukkit.event.inventory.ClickType.NUMBER_KEY
+            && event.getWhoClicked() instanceof Player clicker && event.getHotbarButton() >= 0)
+            touchesTagged = tagOf(clicker.getInventory().getItem(event.getHotbarButton())) != null;
+        if (!touchesTagged && event.getClick() == org.bukkit.event.inventory.ClickType.SWAP_OFFHAND
+            && event.getWhoClicked() instanceof Player clicker)
+            touchesTagged = tagOf(clicker.getInventory().getItemInOffHand()) != null;
         if (!touchesTagged)
             return;
 
@@ -158,6 +190,33 @@ final class CourierListener implements Listener {
         boolean topIsForeign = !(event.getView().getTopInventory().getHolder() instanceof Player);
         boolean movesToTop = event.getClick().isShiftClick() || event.getClickedInventory() == event.getView().getTopInventory();
         if (topIsForeign && movesToTop)
+            event.setCancelled(true);
+    }
+
+    /** Dragging a stack over the slots of a chest is not a click, so it needs its own check. */
+    @EventHandler(ignoreCancelled = true)
+    public void onDrag(InventoryDragEvent event) {
+        if (!cfg().blockMoveToForeignInventory || tagOf(event.getOldCursor()) == null)
+            return;
+        if (event.getView().getTopInventory().getHolder() instanceof Player)
+            return;
+        int top = event.getView().getTopInventory().getSize();
+        for (int slot : event.getRawSlots())
+            if (slot < top) {
+                event.setCancelled(true);
+                return;
+            }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onHopperPickup(InventoryPickupItemEvent event) {
+        if (cfg().blockHopper && tagOf(event.getItem().getItemStack()) != null)
+            event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onArmorStand(PlayerArmorStandManipulateEvent event) {
+        if (cfg().blockItemFrame && tagOf(event.getPlayerItem()) != null)
             event.setCancelled(true);
     }
 
@@ -193,7 +252,9 @@ final class CourierListener implements Listener {
     public void onItemFrame(PlayerInteractEntityEvent event) {
         if (!cfg().blockItemFrame)
             return;
-        if (!(event.getRightClicked() instanceof org.bukkit.entity.ItemFrame))
+        if (!(event.getRightClicked() instanceof org.bukkit.entity.ItemFrame
+            || event.getRightClicked() instanceof org.bukkit.entity.ArmorStand
+            || event.getRightClicked() instanceof org.bukkit.entity.Allay))
             return;
         Player player = event.getPlayer();
         if (tagOf(player.getInventory().getItemInMainHand()) != null || tagOf(player.getInventory().getItemInOffHand()) != null)
@@ -214,7 +275,11 @@ final class CourierListener implements Listener {
         Player player = event.getPlayer();
         if (!manager.isHoldingTagged(player))
             return;
-        String typed = event.getMessage().substring(1).toLowerCase();
+        String typed = event.getMessage().substring(1).strip().toLowerCase();
+        int space = typed.indexOf(' ');
+        int colon = typed.indexOf(':');
+        if (colon > 0 && (space < 0 || colon < space))
+            typed = typed.substring(colon + 1); // plugin:command is the same command
         for (String blocked : cfg().blockedCommandsWhileHolding) {
             if (typed.equals(blocked) || typed.startsWith(blocked + " ")) {
                 event.setCancelled(true);
