@@ -1,10 +1,8 @@
 package dev.courier;
 
-import net.milkbowl.vault.economy.Economy;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -86,11 +84,8 @@ public final class CourierPlugin extends JavaPlugin {
         return true;
     }
 
-    private Economy economy() {
-        if (!getServer().getPluginManager().isPluginEnabled("Vault"))
-            return null;
-        RegisteredServiceProvider<Economy> provider = getServer().getServicesManager().getRegistration(Economy.class);
-        return provider != null ? provider.getProvider() : null;
+    private Payout economy() {
+        return getServer().getPluginManager().isPluginEnabled("Vault") ? VaultPayout.find(getServer()) : null;
     }
 
     private void summary(boolean placeholders) {

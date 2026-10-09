@@ -1,7 +1,6 @@
 package dev.courier;
 
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.milkbowl.vault.economy.Economy;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -17,12 +16,12 @@ final class Rewards {
     private static final Random RANDOM = new Random();
     private static final MiniMessage MM = MiniMessage.miniMessage();
 
-    private final Supplier<Economy> economy;
+    private final Supplier<Payout> economy;
     private final Logger log;
     private boolean warnedNoEconomy;
 
     /** @param economy looked up at the moment of a reward, because the economy plugin can start after Courier */
-    Rewards(Supplier<Economy> economy, Logger log) {
+    Rewards(Supplier<Payout> economy, Logger log) {
         this.economy = economy;
         this.log = log;
     }
@@ -48,10 +47,11 @@ final class Rewards {
         if (reward == null)
             return;
         if (reward.money() > 0) {
-            Economy eco = economy.get();
+            Payout eco = economy.get();
             if (eco != null) {
                 try {
-                    eco.depositPlayer(player, reward.money());
+                    if (!eco.pay(player, reward.money()))
+                        log.warning("The economy refused to pay " + player.getName() + " " + reward.money() + ".");
                 } catch (RuntimeException e) {
                     log.warning("Could not pay " + player.getName() + ": " + e);
                 }

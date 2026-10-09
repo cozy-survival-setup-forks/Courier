@@ -2,7 +2,6 @@ package dev.courier;
 
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.title.Title;
-import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -35,7 +34,7 @@ final class MissionManager {
     private final Map<UUID, Long> rerollAfter = new ConcurrentHashMap<>();
     private long tickCounter;
 
-    MissionManager(CourierPlugin plugin, Storage storage, Supplier<Economy> economy) {
+    MissionManager(CourierPlugin plugin, Storage storage, Supplier<Payout> economy) {
         this.plugin = plugin;
         this.storage = storage;
         this.tag = new ItemTag(plugin);
