@@ -133,3 +133,7 @@ messages:
   info-cooldown: "<gray>%player% - on cooldown, %cooldown_left% left."
   info-idle: "<gray>%player% - no active delivery, no cooldown."
   player-not-found: "<red>Player not found."
+
+metrics:
+  enabled: true
+  interval-minutes: 45
