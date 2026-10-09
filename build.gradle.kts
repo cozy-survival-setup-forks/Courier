@@ -22,6 +22,8 @@ dependencies {
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.9") { isTransitive = false }
     compileOnly("com.sk89q.worldedit:worldedit-core:7.3.9") { isTransitive = false }
 
+    testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    testImplementation("com.github.MilkBowl:VaultAPI:1.7.1") { isTransitive = false }
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -50,5 +52,8 @@ tasks {
 
     jar {
         archiveFileName = "Courier-${project.version}.jar"
+        manifest {
+            attributes("Implementation-Vendor" to "Groovified / Blockie Studios")
+        }
     }
 }
