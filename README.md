@@ -36,11 +36,21 @@ Delivery missions for Paper 1.21.11. A player gets a package, carries it to a ra
 
 ## Files
 
-`config.yml` holds everything, including the texts under `messages:` (MiniMessage). Texts missing from an older file use the built-in ones. Player data is in `data/<uuid>.yml`.
+`config.yml` holds everything, including the texts under `messages:` (MiniMessage). Texts missing from an older file use the built-in ones. Player data (cooldowns, totals and the active delivery) is in `courier.db`. Older `data/<uuid>.yml` files are brought in once at the first start, in one step and checked (players, completed and failed totals, cooldowns and active deliveries must match), and then renamed to `<uuid>.yml.migrated`. A file that cannot be read is left where it is. A finished delivery is saved and written to a reward record before the reward is paid, so a stop in the middle never pays twice: a reward that may have been missed is listed in `/courier doctor` and the console, and `/courier doctor resolve <id>` clears it after you have checked.
+
+## Keeping your files safe
+
+- `config.yml` start with a `config-version` / `lang-version` number. After an update, new settings are added to your files with their comments, and nothing you changed is touched. The old file is kept next to it as `<name>.<date>.bak` (the newest 5). A setting is only removed when the changelog says so.
+- A value with a mistake (a negative time, an item that does not exist, text where a number belongs) is named in the console by file and key. On a reload, the settings in use stay as they were.
+- Files are written to a temporary file and moved into place, with the previous version kept as `.bak`. A file that cannot be read is restored from its `.bak`, and the unreadable one is kept as `.broken-<time>`.
+- A file or database that was made by a newer version of the plugin is left alone and a warning is logged.
+- `courier.db` is a SQLite database in WAL mode. It is checked when the plugin starts, a copy is made on a schedule (`backup.interval-hours`, `backup.keep` in `config.yml`, in the `backups` folder) and every copy is opened and checked before older ones are removed. A damaged database is replaced by the newest copy that checks out, or, where nothing may be lost, the plugin stays off and the file is left untouched.
+- The backup is a consistent snapshot, not a copy of the open file.
+- `/courier doctor` shows the health of the files, versions, last backup and recent save failures (no player data). `/courier backup now` makes a checked backup right away. Both need the admin permission.
 
 ## Telemetry
 
-On startup Courier sends a small anonymous beacon (plugin name/version, server software/version, online/max player counts, and a random ID with no player data) so we know which versions are in use. Turn it off with `metrics.enabled: false` in `config.yml`.
+On startup Courier sends a small anonymous beacon (plugin name/version, server software/version, online/max player counts, and a random ID with no player data) so we know which versions are in use. Turn it off with `metrics.enabled: false` in `config.yml`. The random ID is kept as `server-id` in `courier.db` (older versions kept it in a `.server-id` file, which is moved over unchanged). The address and the interval are fixed in the plugin and are not settings.
 
 ## Building
 

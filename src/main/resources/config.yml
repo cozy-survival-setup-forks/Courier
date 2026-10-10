@@ -1,3 +1,4 @@
+config-version: 1
 mission-duration: "1h"
 cooldown: "24h"
 allow-self-start: true
@@ -134,6 +135,13 @@ messages:
   info-idle: "<gray>%player% - no active delivery, no cooldown."
   player-not-found: "<red>Player not found."
 
+# Copies of the player database (courier.db), made while the server runs and checked before older ones are removed.
+# They are in the "backups" folder. /courier backup now makes one at once.
+backup:
+  # Hours between copies.
+  interval-hours: 6
+  # How many copies to keep.
+  keep: 7
+
 metrics:
   enabled: true
-  interval-minutes: 45

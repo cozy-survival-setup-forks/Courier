@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 final class CourierCommand implements CommandExecutor, TabCompleter {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
-    private static final List<String> SUBS = List.of("start", "cancel", "reset", "info", "reload");
+    private static final List<String> SUBS = List.of("start", "cancel", "reset", "info", "reload", "doctor", "backup");
 
     private final CourierPlugin plugin;
     private final MissionManager manager;
@@ -38,9 +38,34 @@ final class CourierCommand implements CommandExecutor, TabCompleter {
             case "reset" -> reset(sender, args);
             case "info" -> info(sender, args);
             case "reload" -> reload(sender);
+            case "doctor" -> doctor(sender, args);
+            case "backup" -> backup(sender, args);
             default -> sender.sendMessage(MM.deserialize("<red>Unknown subcommand."));
         }
         return true;
+    }
+
+    private void doctor(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("courier.admin")) {
+            sender.sendMessage(manager.msg("no-permission"));
+            return;
+        }
+        if (args.length >= 3 && args[1].equalsIgnoreCase("resolve")) {
+            sender.sendPlainMessage(plugin.resolvePayout(args[2]) ? "Marked as checked." : "No unfinished reward has that id.");
+            return;
+        }
+        plugin.doctor().forEach(sender::sendPlainMessage);
+    }
+
+    private void backup(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("courier.admin")) {
+            sender.sendMessage(manager.msg("no-permission"));
+            return;
+        }
+        if (args.length < 2 || !args[1].equalsIgnoreCase("now"))
+            sender.sendPlainMessage("Use /courier backup now");
+        else
+            sender.sendPlainMessage(plugin.backupNow() ? "Backup made and checked." : "The backup FAILED, see the console.");
     }
 
     private void start(CommandSender sender, String[] args) {

@@ -195,16 +195,36 @@ final class MissionManager {
     }
 
     void complete(Player player) {
-        Mission mission = active.remove(player.getUniqueId());
+        Mission mission = active.get(player.getUniqueId());
         if (mission == null)
             return;
-        removeTagged(player, mission.id);
 
         PlayerData data = storage.get(player.getUniqueId());
+        PlayerData before = data.copy();
         data.completedTotal++;
         data.cooldownUntil = System.currentTimeMillis() + plugin.config().cooldownMs;
         clearMission(data);
-        storage.markDirty(player.getUniqueId());
+
+        // the finished state is on disk, and the payout is written down, before anything is paid: a stop in the middle
+        // can then never pay twice, and a payout that may have been missed is listed for a person to check
+        dev.courier.safe.Journal journal = storage.journal();
+        String record = null;
+        try {
+            if (journal != null)
+                record = journal.begin("mission-reward", "player=" + player.getName() + " uuid=" + player.getUniqueId() + " mission=" + mission.id);
+        } catch (java.sql.SQLException e) {
+            data.copyFrom(before);
+            plugin.getLogger().severe("The reward record could not be written, so the delivery of " + player.getName() + " was not finished yet: " + e.getMessage());
+            return;
+        }
+        if (!storage.saveNow(player.getUniqueId(), data)) {
+            data.copyFrom(before);
+            finishRecord(journal, record, "state could not be saved", false);
+            plugin.getLogger().severe("The data of " + player.getName() + " could not be saved, so the delivery was not finished and nothing was paid.");
+            return;
+        }
+        active.remove(player.getUniqueId());
+        removeTagged(player, mission.id);
 
         Config.RewardEntry always = plugin.config().alwaysReward;
         Config.RewardEntry picked = rewards.pick(plugin.config().rewards);
@@ -216,9 +236,24 @@ final class MissionManager {
             plugin.getLogger().warning("The reward for " + player.getName() + " failed part way: " + e);
         }
 
+        finishRecord(journal, record, null, true);
+
         player.sendMessage(msg("completed"));
         player.showTitle(Title.title(msg("completed"), net.kyori.adventure.text.Component.empty()));
         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f);
+    }
+
+    private void finishRecord(dev.courier.safe.Journal journal, String record, String reason, boolean ok) {
+        if (journal == null || record == null)
+            return;
+        try {
+            if (ok)
+                journal.succeeded(record);
+            else
+                journal.failed(record, reason);
+        } catch (java.sql.SQLException e) {
+            plugin.getLogger().warning("The reward record could not be finished: " + e.getMessage());
+        }
     }
 
     void fail(Player player, String reasonKey, boolean applyCooldown) {
